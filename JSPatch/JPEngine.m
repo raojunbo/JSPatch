@@ -1050,9 +1050,11 @@ static void overrideMethod(Class cls, NSString *selectorName, JSValue *function,
 static id callSelector(NSString *className, NSString *selectorName, JSValue *arguments, JSValue *instance, BOOL isSuper)
 {
     NSString *realClsName = [[instance valueForProperty:@"__realClsName"] toString];
-   
+    // 要调用的是否是实例对象
     if (instance) {
+        // 将js对象转成oc对象
         instance = formatJSToOC(instance);
+        
         if (class_isMetaClass(object_getClass(instance))) {
             className = NSStringFromClass((Class)instance);
             instance = nil;
@@ -1060,16 +1062,17 @@ static id callSelector(NSString *className, NSString *selectorName, JSValue *arg
             return @{@"__isNil": @(YES)};
         }
     }
-    id argumentsObj = formatJSToOC(arguments);//将js参数转成oc的参数
+    //将js参数转成oc的参数
+    id argumentsObj = formatJSToOC(arguments);
     
     if (instance && [selectorName isEqualToString:@"toJS"]) {
         if ([instance isKindOfClass:[NSString class]] || [instance isKindOfClass:[NSDictionary class]] || [instance isKindOfClass:[NSArray class]] || [instance isKindOfClass:[NSDate class]]) {
             return _unboxOCObjectToJS(instance);
         }
     }
-
+    // 通过字符串获取Class
     Class cls = instance ? [instance class] : NSClassFromString(className);
-    SEL selector = NSSelectorFromString(selectorName);
+    SEL selector = NSSelectorFromString(selectorName);// 获取到alloc
     
     NSString *superClassName = nil;
     if (isSuper) {
@@ -1132,7 +1135,7 @@ static id callSelector(NSString *className, NSString *selectorName, JSValue *arg
             _exceptionBlock([NSString stringWithFormat:@"unrecognized selector %@ for class %@", selectorName, className]);
             return nil;
         }
-        invocation= [NSInvocation invocationWithMethodSignature:methodSignature];
+        invocation= [NSInvocation invocationWithMethodSignature:methodSignature]; // 触发invocaton
         [invocation setTarget:cls];
     }
     [invocation setSelector:selector];
