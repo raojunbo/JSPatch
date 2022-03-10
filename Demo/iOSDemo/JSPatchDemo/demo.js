@@ -1,10 +1,11 @@
+// 定义新的类并覆写方法
 defineClass('JPViewController', {
   handleBtn: function(sender) {
     var tableViewCtrl = JPTableViewController.alloc().init()
     self.navigationController().pushViewController_animated(tableViewCtrl, YES)
   }
 })
-
+// 定义新的类 defineClass('JPTableViewController : UITableViewController <UIAlertViewDelegate>', ['data'], {...})
 defineClass('JPTableViewController : UITableViewController <UIAlertViewDelegate>', ['data'], {
   dataSource: function() {
     var data = self.data();
@@ -41,3 +42,7 @@ defineClass('JPTableViewController : UITableViewController <UIAlertViewDelegate>
     console.log('click btn ' + alertView.buttonTitleAtIndex(idx).toJS())
   }
 })
+
+
+
+

@@ -182,54 +182,57 @@ static void (^_exceptionBlock)(NSString *log) = ^void(NSString *log) {
         return [JSValue valueWithObject:_JSLastCallStack inContext:_context];
     };
 #endif
-
+   
+    // 在context中，定义全局函数_OC_defineClass，OC里定义的block，会自动转成js的Function
     context[@"_OC_defineClass"] = ^(NSString *classDeclaration, JSValue *instanceMethods, JSValue *classMethods) {
         return defineClass(classDeclaration, instanceMethods, classMethods);
     };
-
+    // js调用_OC_defineProtocol，在OC中定义协议
     context[@"_OC_defineProtocol"] = ^(NSString *protocolDeclaration, JSValue *instProtocol, JSValue *clsProtocol) {
         return defineProtocol(protocolDeclaration, instProtocol,clsProtocol);
     };
-    
+    // js调用_OC_callI，在OC中对象的方法。
     context[@"_OC_callI"] = ^id(JSValue *obj, NSString *selectorName, JSValue *arguments, BOOL isSuper) {
         return callSelector(nil, selectorName, arguments, obj, isSuper);
     };
+    // js调用_OC_callC，在OC中类的类方法
     context[@"_OC_callC"] = ^id(NSString *className, NSString *selectorName, JSValue *arguments) {
         return callSelector(className, selectorName, arguments, nil, NO);
     };
+    // js对象转成oc对象
     context[@"_OC_formatJSToOC"] = ^id(JSValue *obj) {
         return formatJSToOC(obj);
     };
-    
+    // oc对象转成js对象
     context[@"_OC_formatOCToJS"] = ^id(JSValue *obj) {
         return formatOCToJS([obj toObject]);
     };
-    
+    // js调用获取一个对象的自定义属性
     context[@"_OC_getCustomProps"] = ^id(JSValue *obj) {
         id realObj = formatJSToOC(obj);
         return objc_getAssociatedObject(realObj, kPropAssociatedObjectKey);
     };
-    
+    // js调用设置一个对象的自定义属性
     context[@"_OC_setCustomProps"] = ^(JSValue *obj, JSValue *val) {
         id realObj = formatJSToOC(obj);
         objc_setAssociatedObject(realObj, kPropAssociatedObjectKey, val, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     };
-    
+    // js调用，定义weak函数
     context[@"__weak"] = ^id(JSValue *jsval) {
         id obj = formatJSToOC(jsval);
         return [[JSContext currentContext][@"_formatOCToJS"] callWithArguments:@[formatOCToJS([JPBoxing boxWeakObj:obj])]];
     };
-
+    // js调用，定义__strong函数
     context[@"__strong"] = ^id(JSValue *jsval) {
         id obj = formatJSToOC(jsval);
         return [[JSContext currentContext][@"_formatOCToJS"] callWithArguments:@[formatOCToJS(obj)]];
     };
-    
+    // js调用，取出父类名
     context[@"_OC_superClsName"] = ^(NSString *clsName) {
         Class cls = NSClassFromString(clsName);
         return NSStringFromClass([cls superclass]);
     };
-    
+    // js调用，自动转换成OC类型
     context[@"autoConvertOCType"] = ^(BOOL autoConvert) {
         _autoConvert = autoConvert;
     };
@@ -237,7 +240,7 @@ static void (^_exceptionBlock)(NSString *log) = ^void(NSString *log) {
     context[@"convertOCNumberToString"] = ^(BOOL convertOCNumberToString) {
         _convertOCNumberToString = convertOCNumberToString;
     };
-    
+    // include
     context[@"include"] = ^(NSString *filePath) {
         NSString *absolutePath = [_scriptRootDir stringByAppendingPathComponent:filePath];
         if (!_runnedScript) {
@@ -248,23 +251,23 @@ static void (^_exceptionBlock)(NSString *log) = ^void(NSString *log) {
             [_runnedScript addObject:absolutePath];
         }
     };
-    
+    // js调用，获取resourcePath
     context[@"resourcePath"] = ^(NSString *filePath) {
         return [_scriptRootDir stringByAppendingPathComponent:filePath];
     };
-
+    // js调用，dispatch_after
     context[@"dispatch_after"] = ^(double time, JSValue *func) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(time * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [func callWithArguments:nil];
         });
     };
-    
+    // 定义js函数dispatch_async_main
     context[@"dispatch_async_main"] = ^(JSValue *func) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [func callWithArguments:nil];
         });
     };
-    
+    // 定义js函数dispatch_sync_main
     context[@"dispatch_sync_main"] = ^(JSValue *func) {
         if ([NSThread currentThread].isMainThread) {
             [func callWithArguments:nil];
@@ -274,7 +277,7 @@ static void (^_exceptionBlock)(NSString *log) = ^void(NSString *log) {
             });
         }
     };
-    
+    // 定义js函数dispatch_async_global_queue
     context[@"dispatch_async_global_queue"] = ^(JSValue *func) {
         dispatch_async(dispatch_get_global_queue(0, 0), ^{
             [func callWithArguments:nil];
@@ -326,7 +329,7 @@ static void (^_exceptionBlock)(NSString *log) = ^void(NSString *log) {
     NSString *path = [[NSBundle bundleForClass:[self class]] pathForResource:@"JSPatch" ofType:@"js"];
     if (!path) _exceptionBlock(@"can't find JSPatch.js");
     NSString *jsCore = [[NSString alloc] initWithData:[[NSFileManager defaultManager] contentsAtPath:path] encoding:NSUTF8StringEncoding];
-    
+    // 执行JSPatch初始化js脚本
     if ([_context respondsToSelector:@selector(evaluateScript:withSourceURL:)]) {
         [_context evaluateScript:jsCore withSourceURL:[NSURL URLWithString:@"JSPatch.js"]];
     } else {
@@ -548,8 +551,8 @@ static void addMethodToProtocol(Protocol* protocol, NSString *selectorName, NSSt
 
 static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMethods, JSValue *classMethods)
 {
+    //    JPTableViewController : UITableViewController <UIAlertViewDelegate>
     NSScanner *scanner = [NSScanner scannerWithString:classDeclaration];
-    
     NSString *className;
     NSString *superClassName;
     NSString *protocolNames;
@@ -562,14 +565,16 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
             [scanner scanUpToString:@">" intoString:&protocolNames];
         }
     }
-    
+    // 如果classDeclaration扫描出来的没有superclass，默认是NSObject
     if (!superClassName) superClassName = @"NSObject";
     className = trim(className);
     superClassName = trim(superClassName);
-    
+    // 如果classDeclaration扫描出来的没有protocols，不做处理
     NSArray *protocols = [protocolNames length] ? [protocolNames componentsSeparatedByString:@","] : nil;
     
     Class cls = NSClassFromString(className);
+    // 通过字符串获取cls
+    // 如果该类以不存在，通过objc_allocateClassPair()创建类，并注册到runtime中。哈哈，这里非常关键。
     if (!cls) {
         Class superCls = NSClassFromString(superClassName);
         if (!superCls) {
@@ -579,44 +584,56 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
         cls = objc_allocateClassPair(superCls, className.UTF8String, 0);
         objc_registerClassPair(cls);
     }
-    
+    // 如果追加了协议，创建protocol并添加到cls中
     if (protocols.count > 0) {
         for (NSString* protocolName in protocols) {
             Protocol *protocol = objc_getProtocol([trim(protocolName) cStringUsingEncoding:NSUTF8StringEncoding]);
             class_addProtocol (cls, protocol);
         }
     }
-    
+    // 向类中添加方法（实例方法，类方法）
+    // 如果是实例方法，向cls中添加方法
+    // 如果是类方法，向metaCls添加方法
     for (int i = 0; i < 2; i ++) {
         BOOL isInstance = i == 0;
         JSValue *jsMethods = isInstance ? instanceMethods: classMethods;
-        
         Class currCls = isInstance ? cls: objc_getMetaClass(className.UTF8String);
+        
         NSDictionary *methodDict = [jsMethods toDictionary];
         for (NSString *jsMethodName in methodDict.allKeys) {
             JSValue *jsMethodArr = [jsMethods valueForProperty:jsMethodName];
+            // 函数参数个数
             int numberOfArg = [jsMethodArr[0] toInt32];
+            // 转换为selectorName,alertView_willDismissWithButtonIndex转成alertView:willDismissWithButtonIndex
             NSString *selectorName = convertJPSelectorString(jsMethodName);
             
             if ([selectorName componentsSeparatedByString:@":"].count - 1 < numberOfArg) {
                 selectorName = [selectorName stringByAppendingString:@":"];
             }
-            
+            // 函数
             JSValue *jsMethod = jsMethodArr[1];
+            // 如果原有类已经有此方法了。
             if (class_respondsToSelector(currCls, NSSelectorFromString(selectorName))) {
                 overrideMethod(currCls, selectorName, jsMethod, !isInstance, NULL);
             } else {
+                // 原有类没有此方法，但是是协议的实现
                 BOOL overrided = NO;
                 for (NSString *protocolName in protocols) {
+                    // 是否是"协议"里面的方法
                     char *types = methodTypesInProtocol(protocolName, selectorName, isInstance, YES);
-                    if (!types) types = methodTypesInProtocol(protocolName, selectorName, isInstance, NO);
+                    if (!types) {
+                        // 是否是协议方法
+                        types = methodTypesInProtocol(protocolName, selectorName, isInstance, NO);
+                    }
                     if (types) {
+                        // 是协议方法
                         overrideMethod(currCls, selectorName, jsMethod, !isInstance, types);
                         free(types);
                         overrided = YES;
                         break;
                     }
                 }
+                // 不是overrided,也不是协议方法，即新增的方法
                 if (!overrided) {
                     if (![[jsMethodName substringToIndex:1] isEqualToString:@"_"]) {
                         NSMutableString *typeDescStr = [@"@@:" mutableCopy];
@@ -632,7 +649,7 @@ static NSDictionary *defineClass(NSString *classDeclaration, JSValue *instanceMe
     
     class_addMethod(cls, @selector(getProp:), (IMP)getPropIMP, "@@:@");
     class_addMethod(cls, @selector(setProp:forKey:), (IMP)setPropIMP, "v@:@@");
-
+    // 自此类的注册，方法的添加，就完成了
     return @{@"cls": className, @"superCls": superClassName};
 }
 
@@ -664,9 +681,9 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
     id slf = assignSlf;
     BOOL isBlock = [[assignSlf class] isSubclassOfClass : NSClassFromString(@"NSBlock")];
     
-    NSMethodSignature *methodSignature = [invocation methodSignature];
-    NSInteger numberOfArguments = [methodSignature numberOfArguments];
-    NSString *selectorName = isBlock ? @"" : NSStringFromSelector(invocation.selector);
+    NSMethodSignature *methodSignature = [invocation methodSignature];// invocation的方法签名
+    NSInteger numberOfArguments = [methodSignature numberOfArguments];// 获取参数个数
+    NSString *selectorName = isBlock ? @"" : NSStringFromSelector(invocation.selector); //获取selector
     NSString *JPSelectorName = [NSString stringWithFormat:@"_JP%@", selectorName];
     JSValue *jsFunc = isBlock ? objc_getAssociatedObject(assignSlf, "_JSValue")[@"cb"] : getJSFunctionInObjectHierachy(slf, JPSelectorName);
     if (!jsFunc) {
@@ -675,9 +692,10 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
     }
     
     NSMutableArray *argList = [[NSMutableArray alloc] init];
+    // 自己是也是参数
     if (!isBlock) {
         if ([slf class] == slf) {
-            [argList addObject:[JSValue valueWithObject:@{@"__clsName": NSStringFromClass([slf class])} inContext:_context]];
+            [argList addObject:[JSValue valueWithObject:@{@"__clsName": NSStringFromClass([slf class])} inContext:_context]]; // context里{"__clsName": }
         } else if ([selectorName isEqualToString:@"dealloc"]) {
             [argList addObject:[JPBoxing boxAssignObj:slf]];
             deallocFlag = YES;
@@ -685,7 +703,7 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
             [argList addObject:[JPBoxing boxWeakObj:slf]];
         }
     }
-    
+    // 对各种参数分析，并加入argList
     for (NSUInteger i = isBlock ? 1 : 2; i < numberOfArguments; i++) {
         const char *argumentType = [methodSignature getArgumentTypeAtIndex:i];
         switch(argumentType[0] == 'r' ? argumentType[1] : argumentType[0]) {
@@ -711,6 +729,7 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
             JP_FWD_ARG_CASE('d', double)
             JP_FWD_ARG_CASE('B', BOOL)
             case '@': {
+                // 是对象参数
                 __unsafe_unretained id arg;
                 [invocation getArgument:&arg atIndex:i];
                 if ([arg isKindOfClass:NSClassFromString(@"NSBlock")]) {
@@ -752,6 +771,7 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
                 break;
             }
             case ':': {
+                // 是selector参数
                 SEL selector;
                 [invocation getArgument:&selector atIndex:i];
                 NSString *selectorName = NSStringFromSelector(selector);
@@ -790,7 +810,7 @@ static void JPForwardInvocation(__unsafe_unretained id assignSlf, SEL selector, 
             return;
         }
     }
-    
+    // 将oc参数转成js参数
     NSArray *params = _formatOCToJSList(argList);
     char returnType[255];
     strcpy(returnType, [methodSignature methodReturnType]);
@@ -973,7 +993,7 @@ static void overrideMethod(Class cls, NSString *selectorName, JSValue *function,
         Method method = class_getInstanceMethod(cls, selector);
         typeDescription = (char *)method_getTypeEncoding(method);
     }
-    
+    // 原有的函数实现
     IMP originalImp = class_respondsToSelector(cls, selector) ? class_getMethodImplementation(cls, selector) : NULL;
     
     IMP msgForwardIMP = _objc_msgForward;
@@ -988,15 +1008,18 @@ static void overrideMethod(Class cls, NSString *selectorName, JSValue *function,
             }
         }
     #endif
-
+// 如果 @selector(forwardInvocation:)方法的实现不是JPForwardInvocation,替换成JPForwardInvocation
+    // 1. 某个类的消息转发函数变成了JPForwardInvocation
     if (class_getMethodImplementation(cls, @selector(forwardInvocation:)) != (IMP)JPForwardInvocation) {
         IMP originalForwardImp = class_replaceMethod(cls, @selector(forwardInvocation:), (IMP)JPForwardInvocation, "v@:@");
+        // 保留原有的originalForwardImp实现到ORIGforwardInvocation上
         if (originalForwardImp) {
             class_addMethod(cls, @selector(ORIGforwardInvocation:), originalForwardImp, "v@:@");
         }
     }
 
     [cls jp_fixMethodSignature];
+    // 2. 如果要覆写的方法存在，保留原有的originalImp到originalSelector上
     if (class_respondsToSelector(cls, selector)) {
         NSString *originalSelectorName = [NSString stringWithFormat:@"ORIG%@", selectorName];
         SEL originalSelector = NSSelectorFromString(originalSelectorName);
@@ -1008,11 +1031,19 @@ static void overrideMethod(Class cls, NSString *selectorName, JSValue *function,
     NSString *JPSelectorName = [NSString stringWithFormat:@"_JP%@", selectorName];
     
     _initJPOverideMethods(cls);
+    // 3. "某个类的某个方法"被覆写了，且value中为function
     _JSOverideMethods[cls][JPSelectorName] = function;
-    
+    // 让原有的selector的实现设置为msgForwardIMP。也就是让方法的执行都走转发。
     // Replace the original selector at last, preventing threading issus when
     // the selector get called during the execution of `overrideMethod`
     class_replaceMethod(cls, selector, msgForwardIMP, typeDescription);
+    /*
+     总结下：
+     1. 让原有的消息转发走新的实现JPForwardInvocation；在方法找不到时，会走这这里
+     2. 让被覆盖了的方法的实现也走新的实现JPForwardInvocation；在被覆盖了的方法，会走这个路径。
+     3. 也就是无论是新定义的方法，还是覆盖的方法，都会走JPForwardInvocation的实现。我们在JPForwardInvocation统一处理，真正的逻辑。
+     */
+    
 }
 
 #pragma mark -
@@ -1029,7 +1060,7 @@ static id callSelector(NSString *className, NSString *selectorName, JSValue *arg
             return @{@"__isNil": @(YES)};
         }
     }
-    id argumentsObj = formatJSToOC(arguments);
+    id argumentsObj = formatJSToOC(arguments);//将js参数转成oc的参数
     
     if (instance && [selectorName isEqualToString:@"toJS"]) {
         if ([instance isKindOfClass:[NSString class]] || [instance isKindOfClass:[NSDictionary class]] || [instance isKindOfClass:[NSArray class]] || [instance isKindOfClass:[NSDate class]]) {
@@ -1234,7 +1265,7 @@ static id callSelector(NSString *className, NSString *selectorName, JSValue *arg
     }
     
     if (superClassName) _currInvokeSuperClsName[selectorName] = superClassName;
-    [invocation invoke];
+    [invocation invoke];// 真正执行invocation
     if (superClassName) [_currInvokeSuperClsName removeObjectForKey:selectorName];
     if ([_markArray count] > 0) {
         for (JPBoxing *box in _markArray) {
@@ -1272,7 +1303,7 @@ static id callSelector(NSString *className, NSString *selectorName, JSValue *arg
             } else {
                 returnValue = (__bridge id)result;
             }
-            return formatOCToJS(returnValue);
+            return formatOCToJS(returnValue);// 将oc转成js
             
         } else {
             switch (returnType[0] == 'r' ? returnType[1] : returnType[0]) {
@@ -1777,7 +1808,7 @@ static id formatOCToJS(id obj)
     }
     return _wrapObj(obj);
 }
-
+// 将JS里的东西转换成OC里的对象
 static id formatJSToOC(JSValue *jsval)
 {
     id obj = [jsval toObject];
@@ -1824,7 +1855,7 @@ static id _formatOCToJSList(NSArray *list)
     }
     return arr;
 }
-
+// 将oc对象转成字典形式 {@"__obj": obj, @"__clsName"}
 static NSDictionary *_wrapObj(id obj)
 {
     if (!obj || obj == _nilObj) {
