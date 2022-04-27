@@ -19,8 +19,12 @@
     [self.view addSubview:btn];
 }
 
+//- (void)forwardInvocation:(NSInvocation *)anInvocation {
+//    NSLog(@"来这里吗");
+//}
 - (void)handleBtn:(id)sender
 {
+    NSLog(@"没有截获");
 }
 
 @end

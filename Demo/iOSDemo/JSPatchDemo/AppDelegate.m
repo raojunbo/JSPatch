@@ -13,10 +13,12 @@
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    
+    // 启动引擎(构建oc与js的关联)
     [JPEngine startEngine];
     NSString *sourcePath = [[NSBundle mainBundle] pathForResource:@"demo" ofType:@"js"];
     NSString *script = [NSString stringWithContentsOfFile:sourcePath encoding:NSUTF8StringEncoding error:nil];
+    
+    // 执行修复脚本
     [JPEngine evaluateScript:script];
 
     self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];

@@ -6,13 +6,14 @@ var fc = function() {
     // js的类
     var _jsCls = {};
     
-    // 递归将oc转成js对象
+    // 递归将oc转成js对象。obj可能是数组，可能是函数，可能是对象
     var _formatOCToJS = function(obj) {
         if (obj === undefined || obj === null) return false
-            if (typeof obj == "object") {
-                if (obj.__obj) return obj
-                    if (obj.__isNil) return false
-                        }
+        // 如果是object
+        if (typeof obj == "object") {
+            if (obj.__obj) return obj
+            if (obj.__isNil) return false
+        }
         // 是数组
         if (obj instanceof Array) {
             var ret = []
@@ -46,7 +47,7 @@ var fc = function() {
         }
         return obj
     }
-    // 执行函数
+    // 执行函OC的方法数，实例对象，类名，方法名，参数
     var _methodFunc = function(instance, clsName, methodName, args, isSuper, isPerformSelector) {
         var selectorName = methodName
         if (!isPerformSelector) {
@@ -67,73 +68,75 @@ var fc = function() {
         // 将OC的对象转成JS对象
         return _formatOCToJS(ret)
     }
-    
+    // _customMethods对象，它就是一个对象
     var _customMethods = {
-        // 创建对象的方法
-    __c: function(methodName) {
-        var slf = this
-        
-        if (slf instanceof Boolean) {
-            return function() {
-                return false
+        // __c函数
+        __c: function(methodName) {
+            var slf = this
+            
+            if (slf instanceof Boolean) {
+                return function() {
+                    return false
+                }
             }
-        }
-        if (slf[methodName]) {
-            return slf[methodName].bind(slf);
-        }
-        
-        if (!slf.__obj && !slf.__clsName) {
-            throw new Error(slf + '.' + methodName + ' is undefined')
-        }
-        if (slf.__isSuper && slf.__clsName) {
-            slf.__clsName = _OC_superClsName(slf.__obj.__realClsName ? slf.__obj.__realClsName: slf.__clsName);
-        }
-        var clsName = slf.__clsName
-        if (clsName && _ocCls[clsName]) {
-            var methodType = slf.__obj ? 'instMethods': 'clsMethods'
-            if (_ocCls[clsName][methodType][methodName]) {
-                slf.__isSuper = 0;
-                return _ocCls[clsName][methodType][methodName].bind(slf)
+            if (slf[methodName]) {
+                return slf[methodName].bind(slf);
             }
-        }
-        
-        return function(){
-            var args = Array.prototype.slice.call(arguments)
-            // 调用执行指定对象的指定函数
-            return _methodFunc(slf.__obj, slf.__clsName, methodName, args, slf.__isSuper)
-        }
-    },
-        
-    super: function() {
+            
+            if (!slf.__obj && !slf.__clsName) {
+                throw new Error(slf + '.' + methodName + ' is undefined')
+            }
+            if (slf.__isSuper && slf.__clsName) {
+                slf.__clsName = _OC_superClsName(slf.__obj.__realClsName ? slf.__obj.__realClsName: slf.__clsName);
+            }
+            var clsName = slf.__clsName
+            if (clsName && _ocCls[clsName]) {
+                var methodType = slf.__obj ? 'instMethods': 'clsMethods'
+                if (_ocCls[clsName][methodType][methodName]) {
+                    slf.__isSuper = 0;
+                    return _ocCls[clsName][methodType][methodName].bind(slf)
+                }
+            }
+            
+            return function(){
+                var args = Array.prototype.slice.call(arguments)
+                // 调用执行指定对象的指定函数
+                return _methodFunc(slf.__obj, slf.__clsName, methodName, args, slf.__isSuper)
+            }
+        },
+        // super函数
+        super: function() {
             var slf = this
             if (slf.__obj) {
                 slf.__obj.__realClsName = slf.__realClsName;
             }
             return {__obj: slf.__obj, __clsName: slf.__clsName, __isSuper: 1}
     },
+        // performSelectorInOC
+        performSelectorInOC: function() {
+            var slf = this
+            var args = Array.prototype.slice.call(arguments)
+            return {__isPerformInOC:1, obj:slf.__obj, clsName:slf.__clsName, sel: args[0], args: args[1], cb: args[2]}
+        },
         
-    performSelectorInOC: function() {
-        var slf = this
-        var args = Array.prototype.slice.call(arguments)
-        return {__isPerformInOC:1, obj:slf.__obj, clsName:slf.__clsName, sel: args[0], args: args[1], cb: args[2]}
-    },
-        
-    performSelector: function() {
-        var slf = this
-        var args = Array.prototype.slice.call(arguments)
-        return _methodFunc(slf.__obj, slf.__clsName, args[0], args.splice(1), slf.__isSuper, true)
+        performSelector: function() {
+            var slf = this
+            var args = Array.prototype.slice.call(arguments)
+            return _methodFunc(slf.__obj, slf.__clsName, args[0], args.splice(1), slf.__isSuper, true)
+        }
     }
-    }
-    // 给Object.prototype 定义属性和其属性特性。
+   
+    /**
+    1.configurable:表示能否通过delete删除属性从而重新定义属性，能否修改属性的特性，或者能否把属性修改为访问器属性，默认值为true。
+    2.enumerable：表示能否通过for in循环访问属性，默认值为true
+    3.value：包含这个属性的数据值。默认值为undefined。
+    */
+    // 给这个函数对象的原型Object.prototype定义属性和其属性特性。
     // 原型对象: 如果不能理解原型对象，可以看成是OC里一个对象的类对象，保存了公用的实例方法，这里的原型其实也是起到这个作用
     // 这里就是给Object.prototype 定义了__c，super，performSelectorInOC，performSelector等函数属性。
+    
     for (var method in _customMethods) {
         if (_customMethods.hasOwnProperty(method)) {
-            /**
-             1.configurable:表示能否通过delete删除属性从而重新定义属性，能否修改属性的特性，或者能否把属性修改为访问器属性，默认值为true。
-             2.enumerable：表示能否通过for in循环访问属性，默认值为true
-             3.value：包含这个属性的数据值。默认值为undefined。
-             */
             Object.defineProperty(Object.prototype, method, {value: _customMethods[method], configurable:false, enumerable: false})
         }
     }
@@ -141,9 +144,9 @@ var fc = function() {
     var _require = function(clsName) {
         // 如果clsName不在global中
         if (!global[clsName]) {
-            // 在全局找那个设置
+            // 将类挂到global上，例如 JPViewController
             global[clsName] = {
-            __clsName: clsName
+                __clsName: clsName
             }
         }
         return global[clsName]
@@ -152,40 +155,42 @@ var fc = function() {
     global.require = function() {
         var lastRequire
         for (var i = 0; i < arguments.length; i ++) {
-            arguments[i].split(',').forEach(function(clsName) {
-                lastRequire = _require(clsName.trim())
-            })
+            arguments[i].split(',').forEach(
+                    function(clsName) {
+                        lastRequire = _require(clsName.trim())
+                    }
+            )
         }
         return lastRequire
     }
     
     var _formatDefineMethods = function(methods, newMethods, realClsName) {
-        // 遍历这些methods
         for (var methodName in methods) {
             if (!(methods[methodName] instanceof Function)) return;
             (function(){
-                // JS的Method
                 var originMethod = methods[methodName]
                 // JS的Method转成oc的Method(实际上时将其放在一个函数里，要执行时将参数转成js参数，然后调用原来的js函数)
                 // newMethods[methodNmae]存为数组
-                // 第一个值：originMethod.length 表示函数参数个数
+                // 第一个值：表示函数参数个数,originMethod.length
                 // 第二个值：待执行的js函数
                 newMethods[methodName] = [originMethod.length, function() {
                     try {
-                        // 将OC传进来的参数数组，转成js类型的参数数组
+                        // arguments是函数对象的内部对象，默认属性
+                        // 将oc的参数转换成js的参数
                         var args = _formatOCToJS(Array.prototype.slice.call(arguments))
-                        // 保持上次的global指针
+                        
                         var lastSelf = global.self
-                        // 第一个参数设置为global指针
                         global.self = args[0]
-                        // 自己的ClsName设置上
-                        if (global.self) global.self.__realClsName = realClsName
-                            args.splice(0,1)
-                            // 执行js的原始函数
-                            var ret = originMethod.apply(originMethod, args)
-                            // 环原指针
-                            global.self = lastSelf
-                            return ret
+                       
+                        if (global.self) {
+                            global.self.__realClsName = realClsName
+                        }
+                        // 取(0,1)的参数
+                        args.splice(0,1)
+                        var ret = originMethod.apply(originMethod, args)
+                            
+                        global.self = lastSelf
+                        return ret
                     } catch(e) {
                         _OC_catch(e.message, e.stack)
                     }
@@ -198,17 +203,20 @@ var fc = function() {
         return function() {
             var lastSelf = global.self
             global.self = this
-            // 类名
+            
             this.__realClsName = realClsName
+            // 执行方法
             var ret = func.apply(this, arguments)
+            
             global.self = lastSelf
             return ret
         }
     }
-    
+
     var _setupJSMethod = function(className, methods, isInst, realClsName) {
         for (var name in methods) {
             var key = isInst ? 'instMethods': 'clsMethods',
+            // 遍历所有的方法
             func = methods[name]
             // 重新包装一下
             _ocCls[className][key][name] = _wrapLocalMethod(name, func, realClsName)
@@ -218,7 +226,6 @@ var fc = function() {
     var _propertiesGetFun = function(name){
         return function(){
             var slf = this;
-            // slf 表示外面哪个匿名函数
             if (!slf.__ocProps) {
                 var props = _OC_getCustomProps(slf.__obj)
                 if (!props) {
@@ -251,22 +258,46 @@ var fc = function() {
         };
     }
     // 给global对象设置defineClass属性,这个属性就是一个函数(这里要特别注意js是基于对象的)
-    // 定义类的函数 defineClass('JPTableViewController : UITableViewController <UIAlertViewDelegate>', ['data'], {...})
+    /*
+     定义类的函数
+     defineClass(
+        'JPTableViewController : UITableViewController <UIAlertViewDelegate>',
+        ['data'],
+        {
+            dataSource: function() {
+                var data = self.data();
+                if (data) return data;
+                var data = [];
+                for (var i = 0; i < 20; i ++) {
+                    data.push("cell from js " + i);
+                }
+                self.setData(data)
+                return data;
+            },
+            numberOfSectionsInTableView: function(tableView) {
+                return 1;
+            }
+        }
+     )
+     */
     global.defineClass = function(declaration, properties, instMethods, clsMethods) {
-        // 定义变量新的实例方法newInstMethods，新的类方法newClsMethods
+        // newMethods里的存储如下
+        // newMethods[methodName] = [originMethod.length, function() {}
         var newInstMethods = {}, newClsMethods = {}
         if (!(properties instanceof Array)) {
             clsMethods = instMethods
             instMethods = properties
             properties = null
         }
-        // 如果属性存数组存在，给每个属性添加get和set方法
+       // 1. 属性添加添加get方法和set方法
         if (properties) {
             properties.forEach(
                                function(name){
+                                   // 设置get方法，instMethods里面存的是函数
                                    if (!instMethods[name]) {
                                        instMethods[name] = _propertiesGetFun(name);
                                    }
+                                   // 设置set方法
                                    var nameOfSet = "set"+ name.substr(0,1).toUpperCase() + name.substr(1);
                                    if (!instMethods[nameOfSet]) {
                                        instMethods[nameOfSet] = _propertiesSetFun(name);
@@ -274,34 +305,39 @@ var fc = function() {
                                }
                                );
         }
-        // 分割出真正的类名
+        // 2. 准好其他方法
+        
+        // 分割出真正的类名  eg, JPTableViewController : UITableViewController <UIAlertViewDelegate>
         var realClsName = declaration.split(':')[0].trim()
-        // instMethods,newInstMethods是JS的方法。
-        // 将instMethods的函数处理成newInstMethods
+        // 给一个类定义实例方法
         _formatDefineMethods(instMethods, newInstMethods, realClsName)
-        // 将clsMethods的函数处理成newClsMethods
+        // 给一个类定义类方法
         _formatDefineMethods(clsMethods, newClsMethods, realClsName)
-        // 解析declaration，并定义OCd的类
+        
+        // 3. 调用OC端获取OC端类的定义，返回OC端的定义的{cls:"class名", superCls: "superCls"}
         var ret = _OC_defineClass(declaration, newInstMethods, newClsMethods)
-        // 得到了OC类的className和superCls
         var className = ret['cls']
         var superCls = ret['superCls']
-        // 存储到className的类型的函数信息
+        
+        // 将该类的基本信息填写进去_ocCls
         _ocCls[className] = {
             instMethods: {},
             clsMethods: {},
         }
-        // 将父类的函数给子类
+        
         if (superCls.length && _ocCls[superCls]) {
+            // 将父类的实例方法填写进子类
             for (var funcName in _ocCls[superCls]['instMethods']) {
                 _ocCls[className]['instMethods'][funcName] = _ocCls[superCls]['instMethods'][funcName]
             }
+            // 父类的类方法填写进子类的类方法
             for (var funcName in _ocCls[superCls]['clsMethods']) {
                 _ocCls[className]['clsMethods'][funcName] = _ocCls[superCls]['clsMethods'][funcName]
             }
         }
-        // 将函数装进_ocCls
+        // 将实例函数装进_ocCls
         _setupJSMethod(className, instMethods, 1, realClsName)
+        // 将类函数装进_ocCls
         _setupJSMethod(className, clsMethods, 0, realClsName)
         
         return require(className)
